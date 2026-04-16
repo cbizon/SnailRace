@@ -26,6 +26,7 @@ def run_benchmark(
     timeout_seconds: float,
     save_response_dir: Path | None = None,
     progress: Callable[[str], None] | None = None,
+    log_requests: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     if iterations < 1:
         raise ValueError("iterations must be at least 1")
@@ -47,15 +48,17 @@ def run_benchmark(
                         f"{endpoint['name']} {query['query_name']} iter {iteration}"
                     )
 
-                records.append(
-                    execute_query(
-                        endpoint=endpoint,
-                        query=query,
-                        iteration=iteration,
-                        timeout_seconds=timeout_seconds,
-                        save_response_dir=save_response_dir,
-                    )
+                record = execute_query(
+                    endpoint=endpoint,
+                    query=query,
+                    iteration=iteration,
+                    timeout_seconds=timeout_seconds,
+                    save_response_dir=save_response_dir,
+                    log_requests=log_requests,
                 )
+                records.append(record)
+                if record["error"] and progress is not None:
+                    progress(f"  ERROR: {record['error']}")
 
     finished_at = datetime.now(timezone.utc)
     return {
@@ -80,6 +83,7 @@ def execute_query(
     iteration: int,
     timeout_seconds: float,
     save_response_dir: Path | None = None,
+    log_requests: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     query_url = endpoint["query_url"]
     request_bytes = json.dumps(
@@ -96,6 +100,10 @@ def execute_query(
         },
         method="POST",
     )
+
+    if log_requests is not None:
+        pretty = json.dumps(query["request_body"], indent=2)
+        log_requests(f"POST {query_url}\n{pretty}")
 
     started_at = datetime.now(timezone.utc)
     start = time.perf_counter()

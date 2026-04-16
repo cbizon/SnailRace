@@ -40,6 +40,7 @@ def main(argv: list[str] | None = None) -> int:
     endpoints = [parse_endpoint(value) for value in args.endpoint]
     save_response_dir = Path(args.save_responses).resolve() if args.save_responses else None
 
+    log_requests = (lambda message: print(message, file=sys.stderr)) if args.log_requests else None
     report = run_benchmark(
         endpoints=endpoints,
         queries=queries,
@@ -47,6 +48,7 @@ def main(argv: list[str] | None = None) -> int:
         timeout_seconds=args.timeout_seconds,
         save_response_dir=save_response_dir,
         progress=lambda message: print(message, file=sys.stderr),
+        log_requests=log_requests,
     )
 
     output_path = args.output or default_output_path()
@@ -101,6 +103,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--source-id",
         help="CURIE to substitute for $source_id in template queries (e.g. CHEBI:45783).",
+    )
+    parser.add_argument(
+        "--log-requests",
+        action="store_true",
+        help="Print each request body to stderr before sending.",
     )
     parser.add_argument(
         "--list-queries",
