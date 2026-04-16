@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "trapi-performance-tester"
+version = "0.1.0"
+description = "Standalone TRAPI endpoint performance tester"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+trapi-performance = "trapi_performance_tester.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.setuptools.packages.find]
+include = ["trapi_performance_tester"]
+
+[tool.setuptools.package-data]
+trapi_performance_tester = ["package_queries/*.jsonl"]
