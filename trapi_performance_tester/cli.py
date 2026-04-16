@@ -53,6 +53,7 @@ def main(argv: list[str] | None = None) -> int:
     write_report(report, output_path)
     if output_path != "-":
         print(f"Wrote {output_path}", file=sys.stderr)
+    print_run_summary(report)
     return 1 if report["has_failures"] else 0
 
 
@@ -134,6 +135,20 @@ def parse_endpoint(value: str) -> dict[str, str]:
 def default_output_path() -> str:
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     return str(Path("results") / f"trapi_performance_{timestamp}.json")
+
+
+def print_run_summary(report: dict[str, Any]) -> None:
+    records = report["records"]
+    total_time = sum(r["elapsed_seconds"] for r in records)
+    total_results = sum(r["result_count"] for r in records if r["result_count"] is not None)
+    failures = report["summaries"]["overall"]["failure_count"]
+    parts = [
+        f"requests={report['request_count']}",
+        f"failures={failures}",
+        f"results={total_results}",
+        f"time={total_time:.1f}s",
+    ]
+    print("  ".join(parts), file=sys.stderr)
 
 
 def write_report(report: dict[str, Any], output_path: str) -> None:
