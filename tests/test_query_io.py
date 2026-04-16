@@ -8,10 +8,16 @@ from trapi_performance_tester.query_io import default_query_paths, load_queries
 
 
 def test_default_query_paths_include_packaged_sets() -> None:
-    assert [path.name for path in default_query_paths()] == [
+    names = [path.name for path in default_query_paths()]
+    assert names == [
         "imatinib_asthma_hops.jsonl",
         "robokop_two_hop_trapi.jsonl",
     ]
+
+
+def test_default_query_paths_excludes_kara_templates() -> None:
+    names = [path.name for path in default_query_paths()]
+    assert not any(name.startswith("kara_") for name in names)
 
 
 def test_load_queries_extracts_request_body_and_metadata(tmp_path) -> None:
@@ -52,6 +58,53 @@ def test_load_queries_extracts_request_body_and_metadata(tmp_path) -> None:
     assert query["metadata"]["pinned_node_ids"] == ["CHEBI:1"]
     assert query["metadata"]["edge_predicates"] == ["biolink:treats"]
     assert query["metadata"]["node_categories"]["n1"] == ["biolink:Disease"]
+
+
+def _make_template_query(query_name: str = "template_query") -> dict:
+    return {
+        "query_name": query_name,
+        "message": {
+            "query_graph": {
+                "nodes": {
+                    "$source": {
+                        "ids": ["$source_id"],
+                        "categories": ["biolink:ChemicalEntity"],
+                    },
+                    "$target": {
+                        "categories": ["biolink:DiseaseOrPhenotypicFeature"],
+                    },
+                    "g": {"categories": ["biolink:Gene"]},
+                },
+                "edges": {
+                    "edge_0": {
+                        "subject": "$source",
+                        "object": "$target",
+                        "predicates": ["biolink:treats"],
+                    }
+                },
+            }
+        },
+        "workflow": [{"id": "lookup"}],
+    }
+
+
+def test_load_queries_substitutes_source_id_in_template(tmp_path) -> None:
+    query_path = tmp_path / "templates.jsonl"
+    query_path.write_text(f"{json.dumps(_make_template_query())}\n", encoding="utf-8")
+
+    queries = load_queries([query_path], source_id="CHEBI:45783")
+
+    assert len(queries) == 1
+    source_node = queries[0]["request_body"]["message"]["query_graph"]["nodes"]["$source"]
+    assert source_node["ids"] == ["CHEBI:45783"]
+
+
+def test_load_queries_raises_when_template_loaded_without_source_id(tmp_path) -> None:
+    query_path = tmp_path / "templates.jsonl"
+    query_path.write_text(f"{json.dumps(_make_template_query())}\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="requires --source-id"):
+        load_queries([query_path])
 
 
 def test_load_queries_rejects_invalid_json(tmp_path) -> None:

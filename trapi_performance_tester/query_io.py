@@ -9,12 +9,13 @@ PACKAGE_QUERY_DIR = Path(__file__).resolve().parent / "package_queries"
 
 
 def default_query_paths() -> list[Path]:
-    return sorted(PACKAGE_QUERY_DIR.glob("*.jsonl"))
+    return sorted(p for p in PACKAGE_QUERY_DIR.glob("*.jsonl") if not p.name.startswith("kara_"))
 
 
 def load_queries(
     paths: Iterable[str | Path],
     include_names: set[str] | None = None,
+    source_id: str | None = None,
 ) -> list[dict[str, Any]]:
     queries: list[dict[str, Any]] = []
     seen_names: set[str] = set()
@@ -50,6 +51,14 @@ def load_queries(
 
                 request_body = dict(document)
                 request_body.pop("query_name")
+
+                if _needs_source_id(request_body):
+                    if source_id is None:
+                        raise ValueError(
+                            f"Query {query_name!r} in {path}:{line_number} is a template"
+                            " that requires --source-id"
+                        )
+                    request_body = _apply_source_id(request_body, source_id)
 
                 queries.append(
                     {
@@ -122,6 +131,15 @@ def extract_query_metadata(document: dict[str, Any]) -> dict[str, Any]:
         "node_categories": node_categories,
         "edge_pairs": edge_pairs,
     }
+
+
+def _needs_source_id(request_body: dict) -> bool:
+    return '"$source_id"' in json.dumps(request_body)
+
+
+def _apply_source_id(request_body: dict, source_id: str) -> dict:
+    substituted = json.dumps(request_body).replace('"$source_id"', json.dumps(source_id))
+    return json.loads(substituted)
 
 
 def normalize_string_list(value: Any) -> list[str]:
