@@ -16,6 +16,7 @@ def load_queries(
     paths: Iterable[str | Path],
     include_names: set[str] | None = None,
     source_id: str | None = None,
+    target_id: str | None = None,
 ) -> list[dict[str, Any]]:
     queries: list[dict[str, Any]] = []
     seen_names: set[str] = set()
@@ -52,13 +53,13 @@ def load_queries(
                 request_body = dict(document)
                 request_body.pop("query_name")
 
-                if _needs_source_id(request_body):
-                    if source_id is None:
+                if _is_template(request_body):
+                    if source_id is None and target_id is None:
                         raise ValueError(
                             f"Query {query_name!r} in {path}:{line_number} is a template"
-                            " that requires --source-id"
+                            " that requires --source-id and/or --target-id"
                         )
-                    request_body = _apply_source_id(request_body, source_id)
+                    request_body = _apply_template_ids(request_body, source_id, target_id)
 
                 queries.append(
                     {
@@ -133,13 +134,32 @@ def extract_query_metadata(document: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _needs_source_id(request_body: dict) -> bool:
-    return '"$source_id"' in json.dumps(request_body)
+def _is_template(request_body: dict) -> bool:
+    body_str = json.dumps(request_body)
+    return '"$source_id"' in body_str or '"$target_id"' in body_str
 
 
-def _apply_source_id(request_body: dict, source_id: str) -> dict:
-    substituted = json.dumps(request_body).replace('"$source_id"', json.dumps(source_id))
-    return json.loads(substituted)
+def _apply_template_ids(
+    request_body: dict,
+    source_id: str | None,
+    target_id: str | None,
+) -> dict:
+    body_str = json.dumps(request_body)
+    if source_id is not None:
+        body_str = body_str.replace('"$source_id"', json.dumps(source_id))
+    if target_id is not None:
+        body_str = body_str.replace('"$target_id"', json.dumps(target_id))
+    body = json.loads(body_str)
+    # Strip any remaining placeholder ids so those nodes are unbound
+    qg = body.get("message", {}).get("query_graph", {})
+    for node in qg.get("nodes", {}).values():
+        if isinstance(node.get("ids"), list):
+            clean = [i for i in node["ids"] if not (isinstance(i, str) and i.startswith("$"))]
+            if clean:
+                node["ids"] = clean
+            else:
+                del node["ids"]
+    return body
 
 
 def normalize_string_list(value: Any) -> list[str]:

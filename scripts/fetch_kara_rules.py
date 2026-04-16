@@ -36,14 +36,6 @@ def key_to_slug(key_str: str) -> str:
     return "_".join(parts)
 
 
-def strip_target_ids(query_graph: dict) -> dict:
-    """Remove ids from nodes whose only id is $target_id (unbound target)."""
-    for node in query_graph.get("nodes", {}).values():
-        if node.get("ids") == ["$target_id"]:
-            del node["ids"]
-    return query_graph
-
-
 def main() -> None:
     print(f"Fetching {SOURCE_URL} ...")
     with urllib.request.urlopen(SOURCE_URL) as response:
@@ -57,7 +49,6 @@ def main() -> None:
             if "template" not in rule:
                 continue
             template = json.loads(json.dumps(rule["template"]))
-            strip_target_ids(template["query_graph"])
             doc = {
                 "query_name": f"{slug}_rule_{i:02d}",
                 "message": template,

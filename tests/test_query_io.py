@@ -71,6 +71,7 @@ def _make_template_query(query_name: str = "template_query") -> dict:
                         "categories": ["biolink:ChemicalEntity"],
                     },
                     "$target": {
+                        "ids": ["$target_id"],
                         "categories": ["biolink:DiseaseOrPhenotypicFeature"],
                     },
                     "g": {"categories": ["biolink:Gene"]},
@@ -88,22 +89,47 @@ def _make_template_query(query_name: str = "template_query") -> dict:
     }
 
 
-def test_load_queries_substitutes_source_id_in_template(tmp_path) -> None:
+def test_load_queries_substitutes_source_id_leaves_target_unbound(tmp_path) -> None:
     query_path = tmp_path / "templates.jsonl"
     query_path.write_text(f"{json.dumps(_make_template_query())}\n", encoding="utf-8")
 
     queries = load_queries([query_path], source_id="CHEBI:45783")
 
     assert len(queries) == 1
-    source_node = queries[0]["request_body"]["message"]["query_graph"]["nodes"]["$source"]
-    assert source_node["ids"] == ["CHEBI:45783"]
+    nodes = queries[0]["request_body"]["message"]["query_graph"]["nodes"]
+    assert nodes["$source"]["ids"] == ["CHEBI:45783"]
+    assert "ids" not in nodes["$target"]
 
 
-def test_load_queries_raises_when_template_loaded_without_source_id(tmp_path) -> None:
+def test_load_queries_substitutes_target_id_leaves_source_unbound(tmp_path) -> None:
     query_path = tmp_path / "templates.jsonl"
     query_path.write_text(f"{json.dumps(_make_template_query())}\n", encoding="utf-8")
 
-    with pytest.raises(ValueError, match="requires --source-id"):
+    queries = load_queries([query_path], target_id="MONDO:0005301")
+
+    assert len(queries) == 1
+    nodes = queries[0]["request_body"]["message"]["query_graph"]["nodes"]
+    assert "ids" not in nodes["$source"]
+    assert nodes["$target"]["ids"] == ["MONDO:0005301"]
+
+
+def test_load_queries_substitutes_both_source_and_target_ids(tmp_path) -> None:
+    query_path = tmp_path / "templates.jsonl"
+    query_path.write_text(f"{json.dumps(_make_template_query())}\n", encoding="utf-8")
+
+    queries = load_queries([query_path], source_id="CHEBI:45783", target_id="MONDO:0005301")
+
+    assert len(queries) == 1
+    nodes = queries[0]["request_body"]["message"]["query_graph"]["nodes"]
+    assert nodes["$source"]["ids"] == ["CHEBI:45783"]
+    assert nodes["$target"]["ids"] == ["MONDO:0005301"]
+
+
+def test_load_queries_raises_when_template_loaded_without_any_id(tmp_path) -> None:
+    query_path = tmp_path / "templates.jsonl"
+    query_path.write_text(f"{json.dumps(_make_template_query())}\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="requires --source-id and/or --target-id"):
         load_queries([query_path])
 
 

@@ -18,7 +18,7 @@ def main(argv: list[str] | None = None) -> int:
 
     query_paths = args.query_file or [str(path) for path in default_query_paths()]
     include_names = set(args.query_name) if args.query_name else None
-    queries = load_queries(query_paths, include_names=include_names, source_id=args.source_id)
+    queries = load_queries(query_paths, include_names=include_names, source_id=args.source_id, target_id=args.target_id)
 
     if args.list_queries:
         for query in queries:
@@ -103,6 +103,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--source-id",
         help="CURIE to substitute for $source_id in template queries (e.g. CHEBI:45783).",
+    )
+    parser.add_argument(
+        "--target-id",
+        help="CURIE to substitute for $target_id in template queries (e.g. MONDO:0005301).",
     )
     parser.add_argument(
         "--log-requests",
