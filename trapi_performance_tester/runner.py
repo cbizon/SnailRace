@@ -57,6 +57,10 @@ def run_benchmark(
                     log_requests=log_requests,
                 )
                 records.append(record)
+                if progress is not None:
+                    results = record["result_count"]
+                    result_str = f"{results} results" if results is not None else "no results"
+                    progress(f"  {record['elapsed_seconds']:.1f}s  {result_str}")
                 if record["error"] and progress is not None:
                     progress(f"  ERROR: {record['error']}")
 
