@@ -18,7 +18,12 @@ def main(argv: list[str] | None = None) -> int:
 
     query_paths = args.query_file or [str(path) for path in default_query_paths()]
     include_names = set(args.query_name) if args.query_name else None
-    queries = load_queries(query_paths, include_names=include_names, source_id=args.source_id, target_id=args.target_id)
+    queries = load_queries(
+        query_paths,
+        include_names=include_names,
+        source_id=args.source_id,
+        target_id=args.target_id,
+    )
 
     if args.list_queries:
         for query in queries:
@@ -49,6 +54,9 @@ def main(argv: list[str] | None = None) -> int:
         save_response_dir=save_response_dir,
         progress=lambda message: print(message, file=sys.stderr),
         log_requests=log_requests,
+        callback_bind_host=args.callback_bind_host,
+        callback_port=args.callback_port,
+        callback_base_url=args.callback_base_url,
     )
 
     output_path = args.output or default_output_path()
@@ -68,7 +76,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         required=False,
         default=[],
-        help="Endpoint as name=url or bare URL. Repeat for multiple endpoints.",
+        help="Endpoint as name=url or bare URL. Direct /query and /asyncquery URLs are preserved.",
     )
     parser.add_argument(
         "--query-file",
@@ -90,7 +98,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--timeout-seconds",
         type=float,
         default=300.0,
-        help="Per-request timeout in seconds.",
+        help="Per-request timeout in seconds. For asyncquery this is the callback wait deadline.",
     )
     parser.add_argument(
         "--output",
@@ -99,6 +107,24 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--save-responses",
         help="Directory for raw TRAPI response bodies.",
+    )
+    parser.add_argument(
+        "--callback-bind-host",
+        default="127.0.0.1",
+        help="Local host/interface for the async callback capture server.",
+    )
+    parser.add_argument(
+        "--callback-port",
+        type=int,
+        default=0,
+        help="Local port for the async callback capture server. Defaults to an ephemeral port.",
+    )
+    parser.add_argument(
+        "--callback-base-url",
+        help=(
+            "Public base URL to advertise to asyncquery endpoints. "
+            "If omitted, the bind host and port are used."
+        ),
     )
     parser.add_argument(
         "--source-id",
@@ -136,10 +162,13 @@ def parse_endpoint(value: str) -> dict[str, str]:
     if not base_url:
         raise ValueError(f"Invalid endpoint specification {value!r}")
 
+    query_url = build_query_url(base_url)
+    mode = "asyncquery" if query_url.rstrip("/?").endswith("/asyncquery") else "query"
     return {
         "name": name,
         "base_url": base_url,
-        "query_url": build_query_url(base_url),
+        "query_url": query_url,
+        "mode": mode,
     }
 
 

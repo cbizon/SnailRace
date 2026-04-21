@@ -1,18 +1,19 @@
 # TRAPI Performance Tester
 
 Standalone TRAPI performance runner derived from the Plater deployment harness.
-It posts TRAPI payloads directly to one or more `/query` endpoints, records
-request timings and response sizes, and emits structured JSON output with
-aggregated summaries.
+It posts TRAPI payloads directly to one or more `/query` or `/asyncquery`
+endpoints, records request timings and response sizes, and emits structured
+JSON output with aggregated summaries.
 
 ## Features
 
-- Accepts arbitrary TRAPI endpoint base URLs or direct `/query` URLs
+- Accepts arbitrary TRAPI endpoint base URLs or direct `/query` or `/asyncquery` URLs
 - Loads strict JSONL query sets
 - Emits per-request records and aggregated summaries
 - Summarizes by endpoint, query, endpoint/query pair, hop count, and pinned node
 - Ships with the ported Robokop two-hop query set plus Imatinib-to-asthma 1/2/3-hop queries
 - Optionally saves raw TRAPI response bodies
+- For `/asyncquery`, submits the full batch first and then collects callback payloads as they arrive
 
 ## Usage
 
@@ -28,6 +29,16 @@ Run the packaged queries against one endpoint:
 uv run trapi-performance \
   --endpoint qlever=http://localhost:8000 \
   --output results/qlever.json
+```
+
+Run the packaged queries against an async endpoint:
+
+```bash
+uv run trapi-performance \
+  --endpoint qlever=http://localhost:8000/asyncquery \
+  --callback-bind-host 127.0.0.1 \
+  --callback-port 8765 \
+  --output results/qlever_async.json
 ```
 
 Run only the Imatinib-to-asthma queries:
@@ -50,6 +61,21 @@ uv run trapi-performance \
   --iterations 3 \
   --output results/comparison.json
 ```
+
+If the async endpoint cannot reach your local bind address directly, expose the
+callback server and advertise that public URL instead:
+
+```bash
+uv run trapi-performance \
+  --endpoint qlever=https://example.org/trapi/asyncquery \
+  --callback-bind-host 0.0.0.0 \
+  --callback-port 8765 \
+  --callback-base-url https://public-callback.example.org \
+  --output results/qlever_async_remote.json
+```
+
+`--timeout-seconds` remains a per-request deadline. For `/asyncquery`, that
+deadline is measured from submit time until the matching callback arrives.
 
 ## Output
 
