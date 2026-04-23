@@ -225,6 +225,27 @@ def execute_query(
     )
 
 
+def async_submit_was_accepted(
+    status_code: int | None,
+    submit_payload: dict[str, Any] | None,
+    error_text: str | None,
+) -> bool:
+    if error_text is not None:
+        return False
+    if status_code == 202:
+        return True
+    if status_code != 200:
+        return False
+    if not isinstance(submit_payload, dict):
+        return False
+
+    status = submit_payload.get("status")
+    callback = submit_payload.get("callback")
+    return (isinstance(status, str) and status.lower() == "accepted") or isinstance(
+        callback, str
+    )
+
+
 def submit_async_query(
     endpoint: dict[str, Any],
     query: dict[str, Any],
@@ -256,8 +277,8 @@ def submit_async_query(
     submit_payload, submit_response_error = parse_response_bytes(response_bytes)
     job_id = submit_payload.get("job_id") if isinstance(submit_payload, dict) else None
 
-    if status_code != 202:
-        error_text = combine_errors(error_text, submit_response_error)
+    error_text = combine_errors(error_text, submit_response_error)
+    if not async_submit_was_accepted(status_code, submit_payload, error_text):
         if status_code is not None:
             error_text = combine_errors(
                 error_text,

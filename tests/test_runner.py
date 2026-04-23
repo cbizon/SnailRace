@@ -6,6 +6,8 @@ import urllib.request
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+import pytest
+
 from trapi_performance_tester.query_io import load_queries
 from trapi_performance_tester.runner import build_query_url, run_benchmark
 
@@ -110,7 +112,18 @@ def test_run_benchmark_collects_metrics_and_pinned_node_summary(tmp_path) -> Non
     assert pinned_summary["success_count"] == 2
 
 
-def test_run_benchmark_submits_async_queries_before_waiting_for_callbacks(tmp_path) -> None:
+@pytest.mark.parametrize(
+    ("submit_status_code", "submit_status_field"),
+    [
+        (202, "Accepted"),
+        (200, "accepted"),
+    ],
+)
+def test_run_benchmark_submits_async_queries_before_waiting_for_callbacks(
+    tmp_path,
+    submit_status_code: int,
+    submit_status_field: str,
+) -> None:
     query_documents = [
         {
             "query_name": "async_query_one",
@@ -173,7 +186,11 @@ def test_run_benchmark_submits_async_queries_before_waiting_for_callbacks(tmp_pa
         build_async_callback_payload("CHEBI:2"),
     ]
 
-    with run_async_test_server(callback_payloads) as server_info:
+    with run_async_test_server(
+        callback_payloads,
+        submit_status_code=submit_status_code,
+        submit_status_field=submit_status_field,
+    ) as server_info:
         base_url, requests = server_info
         async_url = f"{base_url}/asyncquery"
         report = run_benchmark(
@@ -204,12 +221,12 @@ def test_run_benchmark_submits_async_queries_before_waiting_for_callbacks(tmp_pa
     assert second_record["query_name"] == "async_query_two"
     assert first_record["query_url"] == async_url
     assert first_record["endpoint_mode"] == "asyncquery"
-    assert first_record["submit_status_code"] == 202
+    assert first_record["submit_status_code"] == submit_status_code
     assert first_record["status_code"] == 200
     assert first_record["result_count"] == 1
     assert first_record["saved_response_path"] is not None
     assert second_record["endpoint_mode"] == "asyncquery"
-    assert second_record["submit_status_code"] == 202
+    assert second_record["submit_status_code"] == submit_status_code
     assert second_record["status_code"] == 200
     assert second_record["result_count"] == 1
     assert second_record["saved_response_path"] is not None
@@ -339,7 +356,12 @@ def run_test_server(response_body: dict, status_code: int = 200):
 
 
 @contextmanager
-def run_async_test_server(callback_payloads: list[dict]):
+def run_async_test_server(
+    callback_payloads: list[dict],
+    *,
+    submit_status_code: int = 202,
+    submit_status_field: str = "Accepted",
+):
     requests: list[dict] = []
     queued_callbacks: list[tuple[str, dict]] = []
     callback_threads: list[threading.Thread] = []
@@ -386,13 +408,13 @@ def run_async_test_server(callback_payloads: list[dict]):
 
             response_body = json.dumps(
                 {
-                    "status": "Accepted",
+                    "status": submit_status_field,
                     "description": "Query accepted for asynchronous processing",
-                    "http_code": 202,
+                    "http_code": submit_status_code,
                     "job_id": f"job-{callback_index + 1}",
                 }
             ).encode("utf-8")
-            self.send_response(202)
+            self.send_response(submit_status_code)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(response_body)))
             self.end_headers()
